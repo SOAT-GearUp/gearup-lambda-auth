@@ -10,7 +10,7 @@
 # API Gateway cobram por requisição: homologação parada custa zero.
 #
 # Pré-requisitos (ver README): gearup-infra-k8s, gearup-infra-db e a API
-# GearUp já implantados no ambiente (a API publica /gearup/<amb>/api/url e
+# GearUp já implantados no ambiente (a API publica /gearup/<amb>/api/host e
 # /gearup/<amb>/jwt/chave no SSM).
 # Secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN.
 # ---------------------------------------------------------------------------
