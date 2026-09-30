@@ -12,7 +12,7 @@ Autenticação **serverless por CPF** e **API Gateway** da plataforma **GearUp**
 - **Lambda authorizer** `gearup-autorizador-<ambiente>` — barra no gateway qualquer chamada a `/api/*` sem JWT válido.
 - **API Gateway (HTTP API)** — porta de entrada única de cada ambiente: roteia `/auth/cpf` para a Lambda e `/api`, `/health`, `/swagger` para a API no EKS, com throttling e access logs.
 
-Decisões: [RFC-003 — Estratégia de autenticação](https://github.com/SOAT-GearUp/GearUp/blob/master/docs/fase-3/RFC/RFC-003%20-%20Estrategia%20de%20autenticacao.md) · [ADR-002 — API Gateway](https://github.com/SOAT-GearUp/GearUp/blob/master/docs/fase-3/ADR/ADR-002%20-%20Comunicacao%20sincrona%20via%20API%20Gateway.md).
+Decisões: [RFC-003 — Estratégia de autenticação](https://github.com/SOAT-GearUp/gearup-api/blob/master/docs/fase-3/RFC/RFC-003%20-%20Estrategia%20de%20autenticacao.md) · [ADR-002 — API Gateway](https://github.com/SOAT-GearUp/gearup-api/blob/master/docs/fase-3/ADR/ADR-002%20-%20Comunicacao%20sincrona%20via%20API%20Gateway.md).
 
 ## Arquitetura
 
@@ -36,7 +36,7 @@ flowchart LR
     SSM[(SSM)] -. "no deploy: banco, chave JWT, URL da API" .-> LA & LZ & GW
 ```
 
-Fluxo detalhado: [Diagramas de Sequência](https://github.com/SOAT-GearUp/GearUp/blob/master/docs/fase-3/Arquitetura/Diagramas%20de%20Sequencia.md).
+Fluxo detalhado: [Diagramas de Sequência](https://github.com/SOAT-GearUp/gearup-api/blob/master/docs/fase-3/Arquitetura/Diagramas%20de%20Sequencia.md).
 
 ## Contrato da API
 
@@ -56,9 +56,9 @@ X-Correlation-ID: opcional
 | 403 | `CLIENTE_INATIVO` | cliente excluído (`Ativo = false`) |
 | 503 | `BANCO_INDISPONIVEL` | falha ao consultar o RDS |
 
-O JWT é **HS256**, `iss=GearUp`, `aud=GearUp.Clients`, `sub` e `cliente_id` = id do cliente, `role=Cliente`, `amr=cpf`, validade de 60 min — idêntico ao emitido pelo login de funcionários da API, que o aceita sem mudanças (teste de contrato em `GearUp/tests/GearUp.Api.IntegrationTests/Autenticacao/TokenLambdaCpfTests.cs`).
+O JWT é **HS256**, `iss=GearUp`, `aud=GearUp.Clients`, `sub` e `cliente_id` = id do cliente, `role=Cliente`, `amr=cpf`, validade de 60 min — idêntico ao emitido pelo login de funcionários da API, que o aceita sem mudanças (teste de contrato em `gearup-api/tests/GearUp.Api.IntegrationTests/Autenticacao/TokenLambdaCpfTests.cs`).
 
-**Swagger e Postman:** o Swagger da API é servido pelo próprio gateway em `https://<gateway>/swagger/index.html` (homologação). A collection [GearUp - Fase 3 - Autenticação CPF](https://github.com/SOAT-GearUp/GearUp/blob/master/docs/fase-3/Postman/GearUp%20-%20Fase%203%20-%20Autenticacao%20CPF.postman_collection.json) exercita `/auth/cpf` e as rotas protegidas. A URL de cada ambiente aparece no resumo do job de deploy e em `aws ssm get-parameter --name /gearup/<amb>/gateway/url`.
+**Swagger e Postman:** o Swagger da API é servido pelo próprio gateway em `https://<gateway>/swagger/index.html` (homologação). A collection [GearUp - Fase 3 - Autenticação CPF](https://github.com/SOAT-GearUp/gearup-api/blob/master/docs/fase-3/Postman/GearUp%20-%20Fase%203%20-%20Autenticacao%20CPF.postman_collection.json) exercita `/auth/cpf` e as rotas protegidas. A URL de cada ambiente aparece no resumo do job de deploy e em `aws ssm get-parameter --name /gearup/<amb>/gateway/url`.
 
 ## Tecnologias
 
@@ -106,13 +106,13 @@ docker compose -f local/docker-compose.yml down
 
 ### Pré-requisitos (por ambiente)
 
-Ordem da plataforma: [gearup-infra-k8s](https://github.com/SOAT-GearUp/gearup-infra-k8s) → [gearup-infra-db](https://github.com/SOAT-GearUp/gearup-infra-db) → [GearUp](https://github.com/SOAT-GearUp/GearUp) → **este**. A pipeline do GearUp publica no SSM o que este repositório consome:
+Ordem da plataforma: [gearup-infra-k8s](https://github.com/SOAT-GearUp/gearup-infra-k8s) → [gearup-infra-db](https://github.com/SOAT-GearUp/gearup-infra-db) → [gearup-api](https://github.com/SOAT-GearUp/gearup-api) → **este**. A pipeline do gearup-api publica no SSM o que este repositório consome:
 
 | Parâmetro SSM | Publicado por |
 |---|---|
 | `/gearup/banco/{host,porta,usuario,senha}` | gearup-infra-db |
-| `/gearup/<amb>/jwt/chave` | GearUp (CD) |
-| `/gearup/<amb>/api/host` | GearUp (CD) — hostname do NLB |
+| `/gearup/<amb>/jwt/chave` | gearup-api (CD) |
+| `/gearup/<amb>/api/host` | gearup-api (CD) — hostname do NLB |
 
 ### CI/CD
 
@@ -142,7 +142,7 @@ terraform -chdir=terraform output url_gateway
 
 ## Observabilidade
 
-A função de autenticação fica em subnet privada **sem NAT** ([ADR-005](https://github.com/SOAT-GearUp/GearUp/blob/master/docs/fase-3/ADR/ADR-005%20-%20Rede%20sem%20NAT%20Gateway.md)), então é monitorada pelo CloudWatch:
+A função de autenticação fica em subnet privada **sem NAT** ([ADR-005](https://github.com/SOAT-GearUp/gearup-api/blob/master/docs/fase-3/ADR/ADR-005%20-%20Rede%20sem%20NAT%20Gateway.md)), então é monitorada pelo CloudWatch:
 
 - logs JSON (uma linha por evento, com `correlationId`, `resultado`, `clienteId`, `duracaoMs` e CPF mascarado `***.982.247-**`);
 - access log JSON do gateway (`requestId`, rota, status, latências, erro do authorizer);

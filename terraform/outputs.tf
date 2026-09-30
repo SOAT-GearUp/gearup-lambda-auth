@@ -1,4 +1,4 @@
-# Publica a URL do gateway para a pipeline do GearUp (smoke test) e para a
+# Publica a URL do gateway para a pipeline do gearup-api (smoke test) e para a
 # documentação, sem que ninguém precise ler este state.
 resource "aws_ssm_parameter" "url_gateway" {
   name  = "/${var.nome_projeto}/${var.ambiente}/gateway/url"
