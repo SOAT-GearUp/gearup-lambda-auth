@@ -112,7 +112,7 @@ Ordem da plataforma: [gearup-infra-k8s](https://github.com/SOAT-GearUp/gearup-in
 |---|---|
 | `/gearup/banco/{host,porta,usuario,senha}` | gearup-infra-db |
 | `/gearup/<amb>/jwt/chave` | GearUp (CD) |
-| `/gearup/<amb>/api/url` | GearUp (CD) — hostname do NLB |
+| `/gearup/<amb>/api/host` | GearUp (CD) — hostname do NLB |
 
 ### CI/CD
 

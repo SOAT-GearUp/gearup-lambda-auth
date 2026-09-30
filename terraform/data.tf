@@ -3,7 +3,7 @@
 #
 #   gearup-infra-k8s -> VPC e subnets privadas (por tag)
 #   gearup-infra-db  -> /gearup/banco/{host,porta,usuario,senha} no SSM
-#   GearUp (app)     -> /gearup/<ambiente>/jwt/chave e /gearup/<ambiente>/api/url
+#   GearUp (app)     -> /gearup/<ambiente>/jwt/chave e /gearup/<ambiente>/api/host
 #
 # Ordem de deploy: infra-k8s -> infra-db -> GearUp -> gearup-lambda-auth.
 # ---------------------------------------------------------------------------
@@ -42,12 +42,15 @@ data "aws_ssm_parameter" "chave_jwt" {
 
 data "aws_ssm_parameter" "url_api" {
   count = var.url_backend == "" ? 1 : 0
-  name  = "/${var.nome_projeto}/${var.ambiente}/api/url"
+  name  = "/${var.nome_projeto}/${var.ambiente}/api/host"
 }
 
 locals {
-  sufixo      = var.ambiente
-  url_backend = trimsuffix(var.url_backend != "" ? var.url_backend : nonsensitive(data.aws_ssm_parameter.url_api[0].value), "/")
+  sufixo = var.ambiente
+  # Gateway -> NLB em HTTP (porta 80): o TLS do cliente termina no API Gateway
+  # e o NLB não tem certificado (sem domínio próprio no lab). Trade-off e
+  # evolução (VPC Link) na ADR-002 do repositório GearUp.
+  url_backend = trimsuffix(var.url_backend != "" ? var.url_backend : "http://${nonsensitive(data.aws_ssm_parameter.url_api[0].value)}", "/")
 
   variaveis_token = {
     JWT_KEY                = data.aws_ssm_parameter.chave_jwt.value
