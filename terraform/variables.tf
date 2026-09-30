@@ -32,7 +32,7 @@ variable "pacote_zip" {
 }
 
 variable "url_backend" {
-  description = "URL base da API no cluster (http://<nlb>). Vazio = http://<hostname do NLB> lido do SSM /gearup/<ambiente>/api/host, publicado pela pipeline do GearUp."
+  description = "URL base da API no cluster (http://<nlb>). Vazio = http://<hostname do NLB> lido do SSM /gearup/<ambiente>/api/host, publicado pela pipeline do gearup-api."
   type        = string
   default     = ""
 }
