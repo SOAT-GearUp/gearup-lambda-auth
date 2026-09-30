@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /auth/cpf",
+  "headers": { "content-type": "application/json", "x-correlation-id": "demo-ativo" },
+  "requestContext": { "requestId": "local-ativo" },
+  "body": "{\"cpf\": \"529.982.247-25\"}",
+  "isBase64Encoded": false
+}
