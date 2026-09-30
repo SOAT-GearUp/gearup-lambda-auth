@@ -1,0 +1,146 @@
+# ---------------------------------------------------------------------------
+# CI/CD da Lambda de autenticação + API Gateway
+#
+#   Pull Request ...... testes (cobertura >= 80%) + terraform fmt/validate
+#   push homolog ...... testes -> pacote -> terraform apply (homolog)    -> smoke test
+#   push main ......... testes -> pacote -> terraform apply (production) -> smoke test
+#   workflow_dispatch . deploy ou destroy de um ambiente escolhido
+#
+# Cada ambiente tem a sua própria pilha (funções + HTTP API), porque Lambda e
+# API Gateway cobram por requisição: homologação parada custa zero.
+#
+# Pré-requisitos (ver README): gearup-infra-k8s, gearup-infra-db e a API
+# GearUp já implantados no ambiente (a API publica /gearup/<amb>/api/url e
+# /gearup/<amb>/jwt/chave no SSM).
+# Secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN.
+# ---------------------------------------------------------------------------
+name: CI/CD Lambda
+
+on:
+  pull_request:
+    branches: [main, homolog]
+  push:
+    branches: [main, homolog]
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: "Ambiente"
+        type: choice
+        options: [homolog, production]
+        default: homolog
+      acao:
+        description: "Ação"
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_VERSION: "1.15.8"
+  AWS_REGION: us-east-1
+
+jobs:
+  testes:
+    name: Testes e validação
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Sintaxe dos entry points
+        run: npm run check
+      - name: Testes unitários com cobertura mínima de 80% de linhas
+        run: npm test
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform fmt / validate
+        run: |
+          terraform fmt -check -recursive
+          terraform -chdir=terraform init -backend=false -input=false
+          terraform -chdir=terraform validate
+
+  deploy:
+    name: Deploy (${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'production' || 'homolog') }})
+    needs: testes
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'production' || 'homolog') }}
+      url: ${{ steps.saida.outputs.url }}
+    concurrency:
+      group: lambda-auth-${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'production' || 'homolog') }}
+      cancel-in-progress: false
+    env:
+      AMBIENTE: ${{ github.event_name == 'workflow_dispatch' && inputs.ambiente || (github.ref_name == 'main' && 'production' || 'homolog') }}
+      ACAO: ${{ inputs.acao || 'deploy' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Verificar credenciais do Learner Lab
+        env:
+          CHAVE: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -z "$CHAVE" ]; then
+            echo "::error::Configure AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY e AWS_SESSION_TOKEN (Learner Lab -> AWS Details -> AWS CLI)."
+            exit 1
+          fi
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Empacotar a função
+        run: bash scripts/empacotar.sh
+      - name: terraform init
+        run: bash scripts/tf-init.sh terraform "lambda-auth/${AMBIENTE}.tfstate"
+      - name: terraform ${{ env.ACAO }}
+        run: |
+          if [ "$ACAO" = "destroy" ]; then
+            terraform -chdir=terraform destroy -input=false -auto-approve -var "ambiente=${AMBIENTE}"
+          else
+            terraform -chdir=terraform apply -input=false -auto-approve -var "ambiente=${AMBIENTE}"
+          fi
+      - name: Saídas
+        id: saida
+        if: env.ACAO == 'deploy'
+        run: |
+          URL=$(terraform -chdir=terraform output -raw url_gateway)
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Lambda de autenticação (${AMBIENTE})"
+            echo "- Gateway: ${URL}"
+            echo "- Autenticação: \`POST ${URL}/auth/cpf\`"
+            echo "- Swagger: ${URL}/swagger/index.html"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke test
+        if: env.ACAO == 'deploy'
+        env:
+          URL: ${{ steps.saida.outputs.url }}
+        run: |
+          # CPF com dígito verificador errado: precisa responder 400 sem tocar no banco.
+          status=$(curl -s -o resposta.json -w '%{http_code}' -X POST "$URL/auth/cpf" \
+            -H 'content-type: application/json' -H "x-correlation-id: smoke-${GITHUB_RUN_ID}" \
+            -d '{"cpf":"123.456.789-00"}')
+          cat resposta.json; echo
+          test "$status" = "400" || { echo "::error::/auth/cpf respondeu $status (esperado 400)"; exit 1; }
+
+          # Rota protegida sem token: o autorizador precisa barrar (401).
+          status=$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/ordens-servico")
+          test "$status" = "401" || { echo "::error::/api sem token respondeu $status (esperado 401)"; exit 1; }
+          echo "Smoke test OK"

@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /auth/cpf",
+  "headers": { "content-type": "application/json", "x-correlation-id": "demo-inexistente" },
+  "requestContext": { "requestId": "local-inexistente" },
+  "body": "{\"cpf\": \"935.411.347-80\"}",
+  "isBase64Encoded": false
+}

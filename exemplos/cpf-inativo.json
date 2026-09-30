@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /auth/cpf",
+  "headers": { "content-type": "application/json", "x-correlation-id": "demo-inativo" },
+  "requestContext": { "requestId": "local-inativo" },
+  "body": "{\"cpf\": \"111.444.777-35\"}",
+  "isBase64Encoded": false
+}
