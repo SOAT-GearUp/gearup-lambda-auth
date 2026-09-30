@@ -1,7 +1,7 @@
 {
   "name": "gearup-lambda-auth",
   "version": "1.0.0",
-  "description": "Autenticação de clientes do GearUp por CPF (AWS Lambda + API Gateway)",
+  "description": "Autenticação de clientes do GearUp por CPF e senha (AWS Lambda + API Gateway)",
   "private": true,
   "type": "module",
   "engines": {
