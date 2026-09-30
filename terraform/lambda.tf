@@ -38,7 +38,7 @@ resource "aws_cloudwatch_log_group" "autorizador" {
 
 resource "aws_lambda_function" "auth" {
   function_name = "${var.nome_projeto}-auth-cpf-${local.sufixo}"
-  description   = "Autenticacao de clientes do GearUp por CPF (${var.ambiente})"
+  description   = "Autenticacao de clientes do GearUp por CPF e senha (${var.ambiente})"
   role          = data.aws_iam_role.lab.arn
 
   filename         = var.pacote_zip
@@ -46,8 +46,10 @@ resource "aws_lambda_function" "auth" {
   handler          = "src/autenticar.handler"
   runtime          = "nodejs22.x"
   architectures    = ["x86_64"]
-  memory_size      = 256
-  timeout          = 10
+  # 512 MB: na Lambda, mais memória = mais CPU. O PBKDF2 de 210.000
+  # iterações é lento de propósito (contra força bruta) e fica em ~0,2 s.
+  memory_size = 512
+  timeout     = 10
 
   vpc_config {
     subnet_ids         = data.aws_subnets.privadas.ids

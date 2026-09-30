@@ -60,7 +60,7 @@ describe('criarRepositorioClientes', () => {
       constructor(opcoes) { this.opcoes = opcoes; this.consultas = []; criados.push(this); }
       async query(sql, parametros) {
         this.consultas.push({ sql, parametros });
-        return { rows: [{ id: 'c1', nome: 'Maria', ativo: true }] };
+        return { rows: [{ id: 'c1', nome: 'Maria', ativo: true, hashesSenha: ['h'] }] };
       }
     }
     const repositorio = criarRepositorioClientes(
@@ -71,7 +71,8 @@ describe('criarRepositorioClientes', () => {
     const primeiro = await repositorio.buscarPorCpf('52998224725');
     await repositorio.buscarPorCpf('11144477735');
 
-    assert.deepEqual(primeiro, { id: 'c1', nome: 'Maria', ativo: true });
+    assert.deepEqual(primeiro, { id: 'c1', nome: 'Maria', ativo: true, hashesSenha: ['h'] });
+    assert.match(criados[0].consultas[0].sql, /"Perfil" = 4/);
     assert.equal(criados.length, 1);
     assert.equal(criados[0].opcoes.max, 2);
     assert.match(criados[0].consultas[0].sql, /"Documento" = \$1/);

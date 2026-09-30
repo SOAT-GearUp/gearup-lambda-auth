@@ -3,6 +3,6 @@
   "routeKey": "POST /auth/cpf",
   "headers": { "content-type": "application/json", "x-correlation-id": "demo-inexistente" },
   "requestContext": { "requestId": "local-inexistente" },
-  "body": "{\"cpf\": \"935.411.347-80\"}",
+  "body": "{\"cpf\": \"935.411.347-80\", \"senha\": \"SenhaCliente@123\"}",
   "isBase64Encoded": false
 }

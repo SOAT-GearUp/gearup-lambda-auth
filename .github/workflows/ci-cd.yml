@@ -136,7 +136,7 @@ jobs:
           # CPF com dígito verificador errado: precisa responder 400 sem tocar no banco.
           status=$(curl -s -o resposta.json -w '%{http_code}' -X POST "$URL/auth/cpf" \
             -H 'content-type: application/json' -H "x-correlation-id: smoke-${GITHUB_RUN_ID}" \
-            -d '{"cpf":"123.456.789-00"}')
+            -d '{"cpf":"123.456.789-00","senha":"smoke-test"}')
           cat resposta.json; echo
           test "$status" = "400" || { echo "::error::/auth/cpf respondeu $status (esperado 400)"; exit 1; }
 

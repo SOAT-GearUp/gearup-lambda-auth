@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /auth/cpf",
+  "headers": { "content-type": "application/json", "x-correlation-id": "demo-sem-usuario" },
+  "requestContext": { "requestId": "local-sem-usuario" },
+  "body": "{\"cpf\": \"714.287.938-60\", \"senha\": \"SenhaCliente@123\"}",
+  "isBase64Encoded": false
+}

@@ -1,5 +1,14 @@
 // Fakes e utilitários compartilhados pelos testes.
+import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import { criarLogger } from '../src/infra/logger.mjs';
+
+// Mesmo formato do PasswordHasher da API, com poucas iterações para os testes
+// ficarem rápidos (as 210.000 reais são cobertas pelo fixture do .NET).
+export async function gerarHash(senha, iteracoes = 1_000) {
+  const salt = randomBytes(16);
+  const hash = pbkdf2Sync(senha, salt, iteracoes, 32, 'sha256');
+  return `PBKDF2-SHA256$${iteracoes}$${salt.toString('base64')}$${hash.toString('base64')}`;
+}
 
 export function criarLoggerEmMemoria() {
   const linhas = [];

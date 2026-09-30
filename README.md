@@ -1,6 +1,6 @@
 # gearup-lambda-auth
 
-Autenticação **serverless por CPF** e **API Gateway** da plataforma **GearUp** (Tech Challenge FIAP — Fase 3).
+Autenticação **serverless por CPF e senha** e **API Gateway** da plataforma **GearUp** (Tech Challenge FIAP — Fase 3).
 
 ## Propósito
 
@@ -8,7 +8,8 @@ Autenticação **serverless por CPF** e **API Gateway** da plataforma **GearUp**
   1. valida o CPF (formato e dígitos verificadores, mesmo algoritmo do value object `Documento` da API);
   2. consulta a **existência** do cliente na base (RDS PostgreSQL);
   3. verifica o **status** (cliente ativo × excluído);
-  4. **gera e devolve um JWT** válido para as APIs protegidas.
+  4. confere a **senha** do usuário de perfil `Cliente` ligado ao cliente (mesmo hash PBKDF2 gravado pela API);
+  5. **gera e devolve um JWT** válido para as APIs protegidas.
 - **Lambda authorizer** `gearup-autorizador-<ambiente>` — barra no gateway qualquer chamada a `/api/*` sem JWT válido.
 - **API Gateway (HTTP API)** — porta de entrada única de cada ambiente: roteia `/auth/cpf` para a Lambda e `/api`, `/health`, `/swagger` para a API no EKS, com throttling e access logs.
 
@@ -45,16 +46,21 @@ POST /auth/cpf
 Content-Type: application/json
 X-Correlation-ID: opcional
 
-{ "cpf": "529.982.247-25" }
+{ "cpf": "529.982.247-25", "senha": "SenhaCliente@123" }
 ```
 
 | Status | `code` | Quando |
 |---|---|---|
 | 200 | — | `{ "accessToken", "tipo": "Bearer", "expiraEm", "cliente": { "id", "nome" } }` |
-| 400 | `CORPO_INVALIDO` / `CPF_INVALIDO` | JSON inválido ou CPF com formato/dígito incorreto (não consulta o banco) |
+| 400 | `CORPO_INVALIDO` / `CPF_INVALIDO` / `SENHA_OBRIGATORIA` | JSON inválido, CPF com formato/dígito incorreto ou senha ausente (não consulta o banco) |
 | 404 | `CLIENTE_NAO_ENCONTRADO` | CPF válido sem cadastro |
 | 403 | `CLIENTE_INATIVO` | cliente excluído (`Ativo = false`) |
+| 401 | `CREDENCIAIS_INVALIDAS` | senha errada **ou** cliente sem usuário ativo de perfil `Cliente` (mesma resposta e mesmo tempo nos dois casos) |
 | 503 | `BANCO_INDISPONIVEL` | falha ao consultar o RDS |
+
+### De onde vem a senha
+
+A senha é a do usuário de perfil `Cliente` criado na API (`POST /api/usuarios` com `perfil: Cliente` e `clienteId`, feito pelo atendente). A Lambda **só lê** `"Usuarios"."SenhaHash"` e verifica no mesmo formato do `PasswordHasher` da API (`PBKDF2-SHA256$210000$<salt>$<hash>`, comparação em tempo constante). Um teste usa um hash gerado pelo próprio .NET para garantir a compatibilidade (`test/senha.test.mjs`). Criar ou trocar senha continua sendo papel da API.
 
 O JWT é **HS256**, `iss=GearUp`, `aud=GearUp.Clients`, `sub` e `cliente_id` = id do cliente, `role=Cliente`, `amr=cpf`, validade de 60 min — idêntico ao emitido pelo login de funcionários da API, que o aceita sem mudanças (teste de contrato em `gearup-api/tests/GearUp.Api.IntegrationTests/Autenticacao/TokenLambdaCpfTests.cs`).
 
@@ -73,10 +79,11 @@ src/
   autenticacao.mjs      regra do fluxo de autenticação (testável, sem AWS)
   autorizacao.mjs       regra do authorizer
   dominio/cpf.mjs       validação e máscara de CPF (LGPD)
+  seguranca/senha.mjs   verificação PBKDF2 compatível com o PasswordHasher da API
   seguranca/token.mjs   emissão/validação do JWT
   dados/clientes.mjs    consulta ao PostgreSQL (pool reaproveitado, TLS)
   infra/                config, logs JSON, utilitários HTTP
-test/                   45 testes, cobertura de linhas 100%
+test/                   55 testes, cobertura de linhas 100%
 terraform/              Lambdas, API Gateway, alarmes (state por ambiente)
 local/                  docker compose: Postgres + emulador da Lambda
 exemplos/               eventos de teste
@@ -95,7 +102,10 @@ Função rodando no emulador oficial da AWS com um Postgres de exemplo (Docker e
 
 ```powershell
 docker compose -f local/docker-compose.yml up --build -d
+# senha de todos os exemplos: SenhaCliente@123 (hash gerado pela API, em local/init.sql)
 curl.exe -s -X POST http://localhost:9000/2015-03-31/functions/function/invocations --data-binary "@exemplos/cpf-ativo.json"
+curl.exe -s -X POST http://localhost:9000/2015-03-31/functions/function/invocations --data-binary "@exemplos/cpf-senha-errada.json"
+curl.exe -s -X POST http://localhost:9000/2015-03-31/functions/function/invocations --data-binary "@exemplos/cpf-sem-usuario.json"
 curl.exe -s -X POST http://localhost:9000/2015-03-31/functions/function/invocations --data-binary "@exemplos/cpf-inativo.json"
 curl.exe -s -X POST http://localhost:9000/2015-03-31/functions/function/invocations --data-binary "@exemplos/cpf-inexistente.json"
 curl.exe -s -X POST http://localhost:9000/2015-03-31/functions/function/invocations --data-binary "@exemplos/cpf-invalido.json"
@@ -154,7 +164,9 @@ aws logs tail /aws/lambda/gearup-auth-cpf-homolog --since 10m --follow
 
 ## Segurança
 
-- Consulta parametrizada; CPF validado antes de tocar no banco.
+- Consulta parametrizada; CPF e senha validados antes de tocar no banco.
+- Senha verificada com PBKDF2-SHA256 (210.000 iterações) e comparação em tempo constante; "sem usuário" e "senha errada" respondem igual e no mesmo tempo.
+- Senha nunca registrada nos logs (coberto por teste).
 - TLS obrigatório até o RDS, validando o certificado com o bundle oficial da AWS.
 - Throttling de 20 req/s (rajada 40) contra enumeração e força bruta.
 - CPF nunca registrado por inteiro (coberto por teste).

@@ -1,17 +1,25 @@
 import { existsSync, readFileSync } from 'node:fs';
 import pg from 'pg';
 
-// Consulta de leitura direto na tabela da API. A Lambda não grava nada: a
-// escrita de clientes continua exclusiva do agregado Cliente na API.
+// Consulta de leitura direto nas tabelas da API. A Lambda não grava nada:
+// clientes e usuários continuam sendo criados e alterados só pela API.
 //
-// "Documento" tem índice único (UX_Clientes_Documento), então a busca é um
-// index scan de uma linha. "Ativo" = false indica cliente excluído
-// (exclusão lógica em Cliente.Excluir()).
+// "Documento" tem índice único (UX_Clientes_Documento) e "Usuarios"."ClienteId"
+// tem índice (IX_Usuarios_ClienteId), então são dois index scans pequenos.
+// "Ativo" = false no cliente indica exclusão lógica (Cliente.Excluir()).
+// Traz os hashes de todos os usuários ativos de perfil Cliente (Perfil = 4,
+// enum PerfilUsuario) ligados ao cliente; o normal é haver um.
+const PERFIL_CLIENTE = 4;
 const CONSULTA_POR_CPF = `
-  SELECT "Id"::text AS id, "Nome" AS nome, "Ativo" AS ativo
-    FROM "Clientes"
-   WHERE "Documento" = $1
-   LIMIT 1`;
+  SELECT c."Id"::text AS id,
+         c."Nome"     AS nome,
+         c."Ativo"    AS ativo,
+         COALESCE(array_agg(u."SenhaHash") FILTER (WHERE u."Id" IS NOT NULL), '{}') AS "hashesSenha"
+    FROM "Clientes" c
+    LEFT JOIN "Usuarios" u
+      ON u."ClienteId" = c."Id" AND u."Perfil" = ${PERFIL_CLIENTE} AND u."Ativo"
+   WHERE c."Documento" = $1
+   GROUP BY c."Id", c."Nome", c."Ativo"`;
 
 const CAMINHO_CA_RDS = new URL('../../certs/rds-global-bundle.pem', import.meta.url);
 

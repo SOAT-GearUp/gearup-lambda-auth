@@ -13,7 +13,7 @@ describe('entry points das funções', () => {
   it('autenticar.handler rejeita CPF inválido sem tocar no banco', async () => {
     const { handler } = await import('../src/autenticar.mjs');
 
-    const resposta = await handler({ body: JSON.stringify({ cpf: '000' }), headers: {}, requestContext: { requestId: 'r' } });
+    const resposta = await handler({ body: JSON.stringify({ cpf: '000', senha: 'x' }), headers: {}, requestContext: { requestId: 'r' } });
 
     assert.equal(resposta.statusCode, 400);
   });
