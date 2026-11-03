@@ -2,7 +2,8 @@
 # Dependências de outros repositórios, resolvidas sem ler states alheios:
 #
 #   gearup-infra-k8s -> VPC e subnets privadas (por tag)
-#   gearup-infra-db  -> /gearup/banco/{host,porta,usuario,senha} no SSM
+#   gearup-infra-db  -> /gearup/<ambiente>/banco/{host,porta,usuario,senha} no SSM
+#                       (uma instância RDS por ambiente)
 #   gearup-api       -> /gearup/<ambiente>/jwt/chave e /gearup/<ambiente>/api/host
 #
 # Ordem de deploy: infra-k8s -> infra-db -> GearUp -> gearup-lambda-auth.
@@ -33,7 +34,7 @@ data "aws_iam_role" "lab" {
 
 data "aws_ssm_parameter" "banco" {
   for_each = toset(["host", "porta", "usuario", "senha"])
-  name     = "/${var.nome_projeto}/banco/${each.value}"
+  name     = "/${var.nome_projeto}/${var.ambiente}/banco/${each.value}"
 }
 
 data "aws_ssm_parameter" "chave_jwt" {

@@ -120,7 +120,7 @@ Ordem da plataforma: [gearup-infra-k8s](https://github.com/SOAT-GearUp/gearup-in
 
 | Parâmetro SSM | Publicado por |
 |---|---|
-| `/gearup/banco/{host,porta,usuario,senha}` | gearup-infra-db |
+| `/gearup/<amb>/banco/{host,porta,usuario,senha}` | gearup-infra-db (uma instância RDS por ambiente) |
 | `/gearup/<amb>/jwt/chave` | gearup-api (CD) |
 | `/gearup/<amb>/api/host` | gearup-api (CD) — hostname do NLB |
 
